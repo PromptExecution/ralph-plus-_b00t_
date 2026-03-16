@@ -7,15 +7,15 @@ Ralph is an autonomous agent loop runner integrated with b00t agent coordination
 Ralph operates with the following role profile:
 
 - **Role**: `executor`
-- **Capabilities**: TaskMaster workflow execution, autonomous loop management
-- **Skills**: `taskmaster`, `autonomous-loop`, `prd-parsing`, `workflow-execution`
+- **Capabilities**: backlog-driven workflow execution, autonomous loop management
+- **Skills**: `backlog-planning`, `autonomous-loop`, `prd-parsing`, `workflow-execution`
 - **Personality**: `persistent` (continues until completion or max iterations)
 
 ## Skills Mapping
 
 ### Core Skills
 
-1. **taskmaster** - TaskMaster-AI integration
+1. **backlog-planning** - Backlog generation and task hygiene
    - Parse PRD documents
    - Generate task lists
    - Track progress
@@ -49,17 +49,17 @@ Ralph exposes the following MCP tools when running in MCP server mode:
 - **ralph_status** - Check current execution status
   - Returns: current task, iteration count, completion status
 
-- **ralph_list_tasks** - List TaskMaster tasks
+- **ralph_list_tasks** - List Ralph backlog tasks
   - Parameters: `--filter` (pending|in-progress|done|blocked)
 
 ### Prompts
 
-- **/ralph-prd** - Generate TaskMaster tasks from PRD
+- **/ralph-prd** - Generate Ralph backlog from PRD
 - **/ralph** - Convert existing tasks to Ralph-compatible format
 
 ### Resources
 
-- **taskmaster://tasks** - Access to TaskMaster task data
+- **ralph://tasks** - Access to Ralph task data
 - **ralph://progress** - Ralph execution progress log
 
 ## Executor Tools
@@ -104,8 +104,8 @@ Ralph is part of the `ralph-stack` which includes:
 - ralph.cli - CLI tools
 - ralph.mcp - MCP server
 - ralph.agent - Agent configuration
-- taskmaster.cli - TaskMaster CLI
-- taskmaster.mcp - TaskMaster MCP server
+- b00t job - backlog and job orchestration
+- taskmaster compatibility - optional legacy integration
 - python (3.11+)
 - uv package manager
 
@@ -114,9 +114,13 @@ Ralph is part of the `ralph-stack` which includes:
 ### Direct CLI
 
 ```bash
-# Initialize TaskMaster in project
+# Create primary backlog
 cd /path/to/project
-taskmaster init
+cat > TODO-next.md <<'EOF'
+# Next
+- [ ] Task one
+- [ ] Task two
+EOF
 
 # Generate tasks from PRD
 # (use /ralph-prd skill in your agent)
@@ -132,7 +136,7 @@ uv run ralph run --tool claude --max-iterations 10
 b00t-cli agent start _b00t_/ralph.agent.toml
 
 # Ralph will:
-# 1. Monitor taskmaster://tasks resource
+# 1. Monitor ralph://tasks resource
 # 2. Execute pending tasks in priority order
 # 3. Report progress via ralph://progress
 # 4. Coordinate with other agents via IPC

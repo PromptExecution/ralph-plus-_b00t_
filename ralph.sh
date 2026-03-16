@@ -37,18 +37,18 @@ error() {
     exit 1
 }
 
-# Display instructions for creating TaskMaster tasks
+# Display instructions for creating backlog items
 show_task_creation_instructions() {
     echo ""
-    echo "To create tasks with the ralph-prd skill, run your designated agent with this prompt:"
+    echo "To create backlog items with the ralph-prd skill, run your designated agent with this prompt:"
     echo ""
     cat <<'EOF'
-Use the ralph-prd skill to generate TaskMaster tasks.json for this repo.
+Use the ralph-prd skill to generate TODO-next.md backlog items for this repo.
 Requirements:
-- Output must be TaskMaster format with tasks[] and metadata.
-- Include 3-7 small, actionable tasks with acceptance criteria.
+- Output must be markdown with checklist items under clear headings.
+- Include 3-7 small, actionable backlog items with acceptance criteria in prose.
 - Use IETF 2119 MUST/SHOULD/MAY in acceptance criteria.
-- Set metadata.project and metadata.branchName appropriately.
+- Put critical-path items first.
 EOF
     echo ""
     echo "Then re-run: ./ralph.sh --agent <amp|claude|codex> [max_iterations]"
@@ -82,116 +82,31 @@ mkdir -p "$UV_CACHE_DIR"
 info "Syncing dependencies with uv..."
 uv sync --quiet || error "uv sync failed (check permissions/network)."
 
-# 3. Check/initialize .taskmaster directory
-TASKMASTER_DIR="$GIT_ROOT/.taskmaster"
-TASKMASTER_MODEL="${RALPH_TASKMASTER_MODEL:-gpt-5-codex}"
-
-if [[ ! -d "$TASKMASTER_DIR" ]]; then
-    warn ".taskmaster directory not found, initializing..."
-
-    # Check if taskmaster CLI is available
-    if command -v taskmaster &> /dev/null; then
-        info "Using taskmaster CLI to initialize"
-        (cd "$GIT_ROOT" && taskmaster init)
-    else
-        # Fallback: Create basic .taskmaster structure manually
-        warn "taskmaster CLI not found, creating basic structure"
-        mkdir -p "$TASKMASTER_DIR/tasks"
-
-        # If tasks.json exists in project root, move it to .taskmaster
-        if [[ -f "$GIT_ROOT/tasks.json" ]]; then
-            info "Moving tasks.json to .taskmaster/tasks/"
-            mv "$GIT_ROOT/tasks.json" "$TASKMASTER_DIR/tasks/tasks.json"
-        fi
-
-        info "Created .taskmaster directory structure (tasks bootstrap pending)"
-    fi
-fi
-
-# 4. Ensure TaskMaster config is bootstrapped (idempotent)
-uv run python - <<PY
-import json
-from datetime import datetime, timezone
-from pathlib import Path
-
-taskmaster_dir = Path("${TASKMASTER_DIR}")
-taskmaster_dir.mkdir(parents=True, exist_ok=True)
-(taskmaster_dir / "tasks").mkdir(exist_ok=True)
-
-config_path = taskmaster_dir / "config.json"
-model = "${TASKMASTER_MODEL}"
-now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-config = {"version": "1.0", "model": model, "created_at": now}
-if config_path.exists():
-    try:
-        config = json.loads(config_path.read_text())
-    except json.JSONDecodeError:
-        config = {"version": "1.0", "model": model, "created_at": now}
-
-if config.get("model") != model:
-    config["model"] = model
-if "created_at" not in config:
-    config["created_at"] = now
-config_path.write_text(json.dumps(config, indent=2) + "\n")
-PY
-
-# 5. Require TaskMaster tasks to exist before running
-TASKS_FILE="$TASKMASTER_DIR/tasks/tasks.json"
-if [[ ! -f "$TASKS_FILE" ]]; then
-    warn "TaskMaster tasks.json not found; nothing to do."
+# 3. Require TODO-next.md backlog to exist before running
+BACKLOG_FILE="$GIT_ROOT/TODO-next.md"
+if [[ ! -f "$BACKLOG_FILE" ]]; then
+    warn "TODO-next.md not found; nothing to do."
     show_task_creation_instructions
     exit 1
 fi
 
 uv run python - <<PY
-import json
 from pathlib import Path
 
-tasks_path = Path("$TASKS_FILE")
-try:
-    payload = json.loads(tasks_path.read_text())
-except json.JSONDecodeError:
-    raise SystemExit(2)
-
-tasks = payload.get("tasks") if isinstance(payload, dict) else None
-if not tasks:
+backlog_path = Path("$BACKLOG_FILE")
+lines = backlog_path.read_text().splitlines()
+items = [line for line in lines if line.strip().startswith("- [ ] ") or line.strip().startswith("- [x] ") or line.strip().startswith("- [X] ")]
+if not items:
     raise SystemExit(3)
 PY
-TASKS_CHECK_EXIT=$?
-if [[ $TASKS_CHECK_EXIT -ne 0 ]]; then
-    warn "TaskMaster tasks.json is empty or invalid; nothing to do."
+BACKLOG_CHECK_EXIT=$?
+if [[ $BACKLOG_CHECK_EXIT -ne 0 ]]; then
+    warn "TODO-next.md has no checklist items; nothing to do."
     show_task_creation_instructions
     exit 1
 fi
 
-# 6. Verify .taskmaster is in .gitignore
-GITIGNORE="$GIT_ROOT/.gitignore"
-
-if [[ ! -f "$GITIGNORE" ]]; then
-    warn ".gitignore not found, creating..."
-    echo ".taskmaster/" > "$GITIGNORE"
-    info "Created .gitignore with .taskmaster/"
-else
-    if ! grep -q "\.taskmaster" "$GITIGNORE"; then
-        warn ".taskmaster not in .gitignore, adding..."
-        echo "" >> "$GITIGNORE"
-        echo "# TaskMaster-AI task storage (managed by taskmaster-ai, not Ralph)" >> "$GITIGNORE"
-        echo ".taskmaster/" >> "$GITIGNORE"
-        info "Added .taskmaster/ to .gitignore"
-    else
-        info ".taskmaster is properly gitignored"
-    fi
-fi
-
-# 7. Verify .taskmaster is actually ignored by git
-if git check-ignore "$TASKMASTER_DIR" > /dev/null 2>&1; then
-    info "Preflight passed: .taskmaster is gitignored"
-else
-    error ".taskmaster is NOT gitignored! Add '.taskmaster/' to .gitignore"
-fi
-
-# 8. All preflight checks passed, delegate to Python runtime
+# 4. All preflight checks passed, delegate to Python runtime
 info "Initialization complete, starting Ralph runtime..."
 echo ""
 

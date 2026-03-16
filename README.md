@@ -12,7 +12,6 @@ Repository: [PromptExecution/b00t-wiggums](https://github.com/PromptExecution/b0
 - Python 3.11+
 - `uv` installed
 - One agent CLI installed/authenticated (`amp`, `claude`, `codex`, or `opencode`)
-- Node.js/npm (for TaskMaster CLI)
 - A git repository for your project
 
 ## Install b00t-wiggums
@@ -23,36 +22,34 @@ cd b00t-wiggums
 uv sync
 ```
 
-## Install TaskMaster-AI (CLI)
+## Backlog Format
 
-Ralph currently relies on the `taskmaster` CLI for task operations.
-
-```bash
-npm install -g @taskmaster-ai/cli
-taskmaster --help
-```
-
-Initialize TaskMaster in your target repo (if not already initialized):
+Ralph now reads work from `TODO-next.md` at the target repo root.
+Use a markdown checklist as the primary backlog:
 
 ```bash
-taskmaster init
+cat > TODO-next.md <<'EOF'
+# Next
+- [ ] Add schema support for feature X
+- [ ] Implement API for feature X
+- [ ] Verify behavior and update tests
+EOF
 ```
 
-## TaskMaster-AI via MCP (optional)
+⚠️ Legacy compatibility remains for `.taskmaster/tasks/tasks.json`, but that path is no longer the recommended setup.
 
-If you also want TaskMaster available to MCP clients:
+## Optional Legacy Compatibility
 
-```bash
-taskmaster mcp start
-```
+If an older repo still uses TaskMaster, Ralph will fall back to `.taskmaster/tasks/tasks.json`.
+New repos SHOULD NOT initialize TaskMaster just to run Ralph.
 
-Example MCP client config (stdio servers):
+Example legacy MCP client config:
 
 ```json
 {
   "mcpServers": {
     "taskmaster": {
-      "command": "taskmaster",
+      "command": "task-master",
       "args": ["mcp", "start"]
     },
     "ralph": {
@@ -93,16 +90,16 @@ cp -r skills/ralph ~/.codex/skills/ralph
 
 ## Quick Start
 
-1) Generate tasks:
+1) Generate backlog:
 
 ```text
-Use the /ralph-prd skill to create TaskMaster tasks for [feature description]
+Use the /ralph-prd skill to create a `TODO-next.md` backlog for [feature description]
 ```
 
-2) Verify tasks exist:
+2) Verify backlog exists:
 
 ```bash
-taskmaster list
+cat TODO-next.md
 ```
 
 3) Run Ralph:
@@ -132,10 +129,11 @@ uv run ralph --mcp --transport http --host 127.0.0.1 --port 8000
 
 ## Key Files
 
-- `ralph.sh` - Wrapper with preflight checks (`uv sync`, TaskMaster bootstrap, gitignore checks)
+- `ralph.sh` - Wrapper with preflight checks (`uv sync`, backlog validation, gitignore checks)
+- `TODO-next.md` - Primary backlog file used by Ralph
 - `ralph/` - Python implementation and CLI
 - `OPERATIONS.md` - Operational reference
-- `.taskmaster/tasks/tasks.json` - TaskMaster task data
+- `.taskmaster/tasks/tasks.json` - Legacy compatibility backlog format
 - `skills/ralph-prd/` - Source for the `/ralph-prd` skill
 - `skills/ralph/` - Source for the `/ralph` conversion skill
 - `flowchart/` - Interactive visualization source

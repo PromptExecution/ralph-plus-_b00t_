@@ -1,4 +1,4 @@
-"""Unit tests for TaskMaster adapter module."""
+"""Unit tests for Ralph backlog adapter module."""
 
 from __future__ import annotations
 
@@ -78,6 +78,16 @@ def sample_tasks_json(tmp_path: Path, sample_task_data: dict) -> Path:
     }
     tasks_file.write_text(json.dumps(tasks_data, indent=2))
     return tasks_file
+
+
+@pytest.fixture
+def sample_todo_next(tmp_path: Path) -> Path:
+    """Create a sample TODO-next.md backlog."""
+    backlog = tmp_path / "TODO-next.md"
+    backlog.write_text(
+        "# TODO-next\n\n## Critical path\n- [ ] First backlog item\n- [x] Done backlog item\n"
+    )
+    return backlog
 
 
 # Task class tests
@@ -284,7 +294,7 @@ def test_cli_client_get_all_tasks_not_found() -> None:
         client = CLITaskMasterClient()
         result = client.get_all_tasks()
         assert isinstance(result, Failure)
-        assert "taskmaster CLI not found" in str(result.failure())
+        assert "task-master CLI not found" in str(result.failure())
 
 
 def test_cli_client_update_task_status_success() -> None:
@@ -295,7 +305,7 @@ def test_cli_client_update_task_status_success() -> None:
         assert isinstance(result, Success)
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
-        assert "taskmaster" in args
+        assert "task-master" in args
         assert "update" in args
         assert "task-001" in args
         assert "done" in args
@@ -363,7 +373,7 @@ def test_cli_client_add_task_note_success() -> None:
         assert isinstance(result, Success)
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
-        assert "taskmaster" in args
+        assert "task-master" in args
         assert "add-note" in args
         assert "task-001" in args
 
@@ -375,7 +385,7 @@ def test_cli_client_get_task_by_id_cli_error() -> None:
         client = CLITaskMasterClient()
         result = client.get_task_by_id("task-001")
         assert isinstance(result, Failure)
-        assert "taskmaster get failed" in str(result.failure())
+        assert "task-master get failed" in str(result.failure())
 
 
 def test_cli_client_update_task_status_cli_error() -> None:
@@ -385,7 +395,7 @@ def test_cli_client_update_task_status_cli_error() -> None:
         client = CLITaskMasterClient()
         result = client.update_task_status("task-001", "done")
         assert isinstance(result, Failure)
-        assert "taskmaster update failed" in str(result.failure())
+        assert "task-master update failed" in str(result.failure())
 
 
 def test_cli_client_add_task_note_cli_error() -> None:
@@ -395,7 +405,7 @@ def test_cli_client_add_task_note_cli_error() -> None:
         client = CLITaskMasterClient()
         result = client.add_task_note("task-001", "note")
         assert isinstance(result, Failure)
-        assert "taskmaster add-note failed" in str(result.failure())
+        assert "task-master add-note failed" in str(result.failure())
 
 
 def test_cli_client_get_all_tasks_cli_error() -> None:
@@ -405,7 +415,7 @@ def test_cli_client_get_all_tasks_cli_error() -> None:
         client = CLITaskMasterClient()
         result = client.get_all_tasks()
         assert isinstance(result, Failure)
-        assert "taskmaster list failed" in str(result.failure())
+        assert "task-master list failed" in str(result.failure())
 
 
 # MCPTaskMasterClient tests
@@ -441,6 +451,17 @@ def test_create_client_file_based_by_default(tmp_path: Path) -> None:
     tasks_file.write_text(json.dumps({"tasks": [], "metadata": {}}))
     client = create_client(prefer_mcp=False, tasks_file=tasks_file)
     assert isinstance(client, FileTaskMasterClient)
+
+
+def test_markdown_backlog_is_parsed(sample_todo_next: Path) -> None:
+    """Test FileTaskMasterClient parses TODO-next.md checklist items."""
+    client = FileTaskMasterClient(tasks_file=sample_todo_next)
+    result = client.get_all_tasks()
+    assert isinstance(result, Success)
+    tasks = result.unwrap()
+    assert [task.id for task in tasks] == ["todo-4", "todo-5"]
+    assert tasks[0].title == "First backlog item"
+    assert tasks[0].status == "pending"
 
 
 def test_create_client_mcp_fallback_to_file(tmp_path: Path) -> None:

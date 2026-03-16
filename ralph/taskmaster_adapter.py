@@ -1,7 +1,7 @@
-"""TaskMaster adapter - abstraction for task management via MCP or CLI.
+"""Backlog adapter for Ralph task management.
 
-IMPORTANT: This module NEVER accesses tasks.json directly.
-All task operations go through TaskMaster-AI's interface (MCP or CLI).
+Primary source is TODO-next.md markdown backlog.
+Legacy TaskMaster-style JSON task files remain readable for compatibility.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ class Task:
 
 
 class TaskMasterClient(Protocol):
-    """Protocol for task management operations."""
+    """Protocol for backlog management operations."""
 
     def get_next_task(self) -> Result[Task, Exception]:
         """Get the next available task (highest priority, not blocked)."""
@@ -97,12 +97,74 @@ class TaskMasterClient(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class FileTaskMasterClient:
-    """File-based TaskMaster client - reads/writes tasks.json directly."""
+    """File-based backlog client for TODO-next.md or legacy JSON task files."""
 
-    tasks_file: Path = Path("tasks.json")
+    tasks_file: Path = Path("TODO-next.md")
+
+    def _is_markdown_backlog(self) -> bool:
+        return self.tasks_file.suffix.lower() in {".md", ".markdown"}
+
+    def _read_markdown_tasks(self) -> list[Task]:
+        tasks: list[Task] = []
+        lines = self.tasks_file.read_text().splitlines()
+        section = "backlog"
+
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                section = stripped.lstrip("#").strip() or section
+                continue
+
+            status = None
+            if stripped.startswith("- [ ] "):
+                status = "pending"
+                title = stripped[6:].strip()
+            elif stripped.startswith("- [x] ") or stripped.startswith("- [X] "):
+                status = "done"
+                title = stripped[6:].strip()
+            else:
+                continue
+
+            tasks.append(
+                Task(
+                    id=f"todo-{idx}",
+                    title=title,
+                    description=f"{section}: {title}",
+                    status=status,
+                    priority=idx,
+                    acceptance_criteria=[],
+                    depends_on=[],
+                    blocked_by=[],
+                    notes=[],
+                    created_at=datetime.now().isoformat(),
+                    updated_at=datetime.now().isoformat(),
+                )
+            )
+
+        return tasks
+
+    def _write_markdown_status(self, task_id: str, status: str) -> Result[None, Exception]:
+        try:
+            target_line = int(task_id.removeprefix("todo-"))
+        except ValueError:
+            return Failure(Exception(f"Unknown markdown backlog task id: {task_id}"))
+
+        lines = self.tasks_file.read_text().splitlines()
+        if target_line < 1 or target_line > len(lines):
+            return Failure(Exception(f"Task {task_id} not found"))
+
+        line = lines[target_line - 1]
+        if "- [ ] " not in line and "- [x] " not in line and "- [X] " not in line:
+            return Failure(Exception(f"Task {task_id} is not a checklist item"))
+
+        checked = status in {"done", "completed", "complete"}
+        prefix_src = "- [x] " if "- [x] " in line else "- [X] " if "- [X] " in line else "- [ ] "
+        lines[target_line - 1] = line.replace(prefix_src, "- [x] " if checked else "- [ ] ", 1)
+        self.tasks_file.write_text("\n".join(lines) + "\n")
+        return Success(None)
 
     def get_next_task(self) -> Result[Task, Exception]:
-        """Get the next available task from tasks.json."""
+        """Get the next available task from the backlog."""
         tasks_result = self.get_all_tasks()
         if isinstance(tasks_result, Failure):
             return tasks_result
@@ -124,7 +186,7 @@ class FileTaskMasterClient:
         return Success(available[0])
 
     def get_task_by_id(self, task_id: str) -> Result[Task, Exception]:
-        """Get a specific task by ID from tasks.json."""
+        """Get a specific task by ID from the backlog."""
         tasks_result = self.get_all_tasks()
         if isinstance(tasks_result, Failure):
             return tasks_result
@@ -139,7 +201,10 @@ class FileTaskMasterClient:
     def update_task_status(
         self, task_id: str, status: str
     ) -> Result[None, Exception]:
-        """Update task status in tasks.json."""
+        """Update task status in markdown backlog or legacy JSON."""
+        if self._is_markdown_backlog():
+            return self._write_markdown_status(task_id, status)
+
         try:
             # Read current data
             data = json.loads(self.tasks_file.read_text())
@@ -168,7 +233,10 @@ class FileTaskMasterClient:
     def add_task_note(
         self, task_id: str, note: str
     ) -> Result[None, Exception]:
-        """Add a timestamped note to a task in tasks.json."""
+        """Add a timestamped note to a legacy JSON task file."""
+        if self._is_markdown_backlog():
+            return Success(None)
+
         try:
             # Read current data
             data = json.loads(self.tasks_file.read_text())
@@ -198,10 +266,16 @@ class FileTaskMasterClient:
             return Failure(exc)
 
     def get_all_tasks(self) -> Result[list[Task], Exception]:
-        """Get all tasks from tasks.json."""
+        """Get all tasks from TODO-next.md or legacy JSON."""
         try:
             if not self.tasks_file.exists():
                 return Failure(Exception(f"Tasks file not found: {self.tasks_file}"))
+
+            if self._is_markdown_backlog():
+                tasks = self._read_markdown_tasks()
+                if not tasks:
+                    return Failure(Exception(f"No checklist items found in {self.tasks_file}"))
+                return Success(tasks)
 
             data = json.loads(self.tasks_file.read_text())
             tasks_data = data.get("tasks", [])
@@ -213,11 +287,7 @@ class FileTaskMasterClient:
 
 @dataclass(frozen=True, slots=True)
 class CLITaskMasterClient:
-    """TaskMaster CLI client - uses taskmaster command-line tool.
-
-    Respects separation of concerns: TaskMaster-AI owns task CRUD,
-    Ralph consumes via CLI interface.
-    """
+    """Legacy TaskMaster CLI client retained for compatibility only."""
 
     def get_next_task(self) -> Result[Task, Exception]:
         """Get the next available task via taskmaster CLI."""
@@ -245,7 +315,7 @@ class CLITaskMasterClient:
         """Get a specific task by ID via CLI."""
         try:
             result = subprocess.run(
-                ["taskmaster", "get", task_id, "--format", "json"],
+                ["task-master", "get", task_id, "--format", "json"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -253,9 +323,9 @@ class CLITaskMasterClient:
             task_data = json.loads(result.stdout)
             return Success(Task.from_dict(task_data))
         except subprocess.CalledProcessError as e:
-            return Failure(Exception(f"taskmaster get failed: {e.stderr}"))
+            return Failure(Exception(f"task-master get failed: {e.stderr}"))
         except FileNotFoundError:
-            return Failure(Exception("taskmaster CLI not found"))
+            return Failure(Exception("task-master CLI not found"))
         except Exception as exc:
             return Failure(exc)
 
@@ -265,16 +335,16 @@ class CLITaskMasterClient:
         """Update task status via CLI."""
         try:
             subprocess.run(
-                ["taskmaster", "update", task_id, "--status", status],
+                ["task-master", "update", task_id, "--status", status],
                 capture_output=True,
                 text=True,
                 check=True,
             )
             return Success(None)
         except subprocess.CalledProcessError as e:
-            return Failure(Exception(f"taskmaster update failed: {e.stderr}"))
+            return Failure(Exception(f"task-master update failed: {e.stderr}"))
         except FileNotFoundError:
-            return Failure(Exception("taskmaster CLI not found"))
+            return Failure(Exception("task-master CLI not found"))
         except Exception as exc:
             return Failure(exc)
 
@@ -285,16 +355,16 @@ class CLITaskMasterClient:
         try:
             timestamped_note = f"{datetime.now().isoformat()}: {note}"
             subprocess.run(
-                ["taskmaster", "add-note", task_id, timestamped_note],
+                ["task-master", "add-note", task_id, timestamped_note],
                 capture_output=True,
                 text=True,
                 check=True,
             )
             return Success(None)
         except subprocess.CalledProcessError as e:
-            return Failure(Exception(f"taskmaster add-note failed: {e.stderr}"))
+            return Failure(Exception(f"task-master add-note failed: {e.stderr}"))
         except FileNotFoundError:
-            return Failure(Exception("taskmaster CLI not found"))
+            return Failure(Exception("task-master CLI not found"))
         except Exception as exc:
             return Failure(exc)
 
@@ -302,7 +372,7 @@ class CLITaskMasterClient:
         """Get all tasks via CLI."""
         try:
             result = subprocess.run(
-                ["taskmaster", "list", "--format", "json"],
+                ["task-master", "list", "--format", "json"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -312,9 +382,9 @@ class CLITaskMasterClient:
             tasks = [Task.from_dict(t) for t in tasks_data]
             return Success(tasks)
         except subprocess.CalledProcessError as e:
-            return Failure(Exception(f"taskmaster list failed: {e.stderr}"))
+            return Failure(Exception(f"task-master list failed: {e.stderr}"))
         except FileNotFoundError:
-            return Failure(Exception("taskmaster CLI not found - install taskmaster-ai"))
+            return Failure(Exception("task-master CLI not found"))
         except Exception as exc:
             return Failure(exc)
 
@@ -362,15 +432,15 @@ def create_client(
     tasks_file: Path | None = None,
 ) -> TaskMasterClient:
     """
-    Factory function to create appropriate TaskMaster client.
+    Factory function to create appropriate backlog client.
 
     Args:
         prefer_mcp: If True, try MCP first and fallback to file-based
         mcp_url: URL for MCP server (optional)
-        tasks_file: Path to tasks.json file (default: ./tasks.json)
+        tasks_file: Path to backlog file (default: ./TODO-next.md)
 
     Returns:
-        TaskMasterClient implementation (MCP, CLI, or file-based)
+        TaskMasterClient implementation (MCP, legacy CLI, or file-based)
     """
     if prefer_mcp:
         # Try MCP client first
@@ -381,17 +451,37 @@ def create_client(
             return mcp_client
 
         # MCP failed, fall back to file-based
-        return FileTaskMasterClient(tasks_file=tasks_file or Path("tasks.json"))
+        return FileTaskMasterClient(tasks_file=tasks_file or Path("TODO-next.md"))
 
-    # Default to file-based client
-    return FileTaskMasterClient(tasks_file=tasks_file or Path("tasks.json"))
+    if tasks_file is None:
+        default_backlog = Path("TODO-next.md")
+        if default_backlog.exists():
+            return FileTaskMasterClient(tasks_file=default_backlog)
+        legacy_backlog = Path(".taskmaster/tasks/tasks.json")
+        if legacy_backlog.exists():
+            return FileTaskMasterClient(tasks_file=legacy_backlog)
+
+    return FileTaskMasterClient(tasks_file=tasks_file or Path("TODO-next.md"))
 
 
 def get_current_branch() -> Maybe[str]:
-    """Get the configured branch name from TaskMaster CLI."""
+    """Get branch name from git, with legacy task-master fallback."""
     try:
         result = subprocess.run(
-            ["taskmaster", "metadata", "--field", "branchName"],
+            ["git", "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        branch = result.stdout.strip()
+        if branch:
+            return Some(branch)
+    except Exception:
+        pass
+
+    try:
+        result = subprocess.run(
+            ["task-master", "metadata", "--field", "branchName"],
             capture_output=True,
             text=True,
             check=True,

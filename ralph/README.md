@@ -1,6 +1,6 @@
 # Ralph (Python Package)
 
-Ralph is a Python CLI tool that runs AI coding agents (amp, claude, codex, opencode) in an iterative loop until they complete their tasks or reach a maximum iteration limit. It integrates with TaskMaster for rich task management, visual progress tracking, and dependency management.
+Ralph is a Python CLI tool that runs AI coding agents (amp, claude, codex, opencode) in an iterative loop until they complete their tasks or reach a maximum iteration limit. It uses `TODO-next.md` as the primary backlog, with legacy TaskMaster compatibility retained for older repos.
 
 ## Installation
 
@@ -111,8 +111,8 @@ options:
 
 ## How It Works
 
-1. **Initialization**: Ralph reads `tasks.json` and `progress.txt` from the project root
-2. **TaskMaster Integration**: Connects to TaskMaster (file-based or MCP) for task management
+1. **Initialization**: Ralph reads `TODO-next.md` and `progress.txt` from the project root
+2. **Backlog Integration**: Uses `TODO-next.md` first and legacy TaskMaster data as fallback
 3. **Visual Progress**: Displays Unicode progress bar and task tree with status icons
 4. **Branch Detection**: Checks if git branch has changed since last run
 5. **Archival**: If branch changed, archives previous run to `archive/{date}-{branch-name}/`
@@ -151,7 +151,7 @@ Ralph supports the following environment variables for configuration:
 | `CODEX_EXTRA_ARGS` | Additional codex arguments | (empty) |
 | `OPENCODE_MODEL` | OpenCode model to use | `opencode-default` |
 | `OPENCODE_EXTRA_ARGS` | Additional opencode arguments | (empty) |
-| `TASKMASTER_URL` | TaskMaster server URL (if using MCP) | (empty, uses file-based) |
+| `TASKMASTER_URL` | Legacy TaskMaster server URL (if using MCP) | (empty, uses file-based) |
 
 ### Example: Custom Codex Configuration
 
@@ -162,13 +162,26 @@ export CODEX_FULL_AUTO="false"
 uv run ralph --tool codex 15
 ```
 
-## TaskMaster Integration
+## Backlog Integration
 
-Ralph integrates with [TaskMaster-AI](https://github.com/taskmaster-ai/taskmaster) for rich task management and visual progress tracking.
+Ralph is backlog-first. The preferred operator format is `TODO-next.md` with markdown checklist items.
 
-### Task Format
+```markdown
+# Next
+- [ ] Add schema support
+- [ ] Implement API
+- [ ] Validate behavior
+```
 
-Ralph uses TaskMaster's `tasks.json` format with the following structure:
+Ralph still supports [TaskMaster-AI](https://github.com/taskmaster-ai/taskmaster) data for older repos.
+
+### Primary Task Format
+
+Checklist items in `TODO-next.md` become Ralph tasks automatically. Each unchecked item is pending; each checked item is done.
+
+### Legacy TaskMaster Format
+
+Older repos may still use `tasks.json` with the following structure:
 
 ```json
 {

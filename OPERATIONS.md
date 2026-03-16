@@ -4,7 +4,7 @@ This repo implements the Ralph loop runner. Ralph runs an agent repeatedly until
 
 `<promise>COMPLETE</promise>`
 
-Ralph is intentionally context-scoped: each iteration is a fresh agent invocation. Long-term memory MUST live in repo state (git history, `progress.txt`, and TaskMaster tasks).
+Ralph is intentionally context-scoped: each iteration is a fresh agent invocation. Long-term memory MUST live in repo state (git history, `progress.txt`, and the checked-in backlog).
 
 ## Prereqs
 
@@ -15,13 +15,27 @@ Ralph is intentionally context-scoped: each iteration is a fresh agent invocatio
   - `codex`
 - A git repo (Ralph resolves the project root by walking up to `.git`)
 
-## Tasks (TaskMaster)
+## Tasks (Primary Backlog)
 
-Ralph uses TaskMaster tasks stored at:
+Ralph reads tasks from:
+
+`TODO-next.md`
+
+Use markdown checklist items:
+
+```markdown
+# Next
+- [ ] Task one
+- [ ] Task two
+```
+
+If `TODO-next.md` is missing/empty/invalid, `./ralph.sh` exits early and prints a copy/paste prompt to generate tasks (nothing runs until tasks exist).
+
+## Tasks (Legacy Compatibility)
+
+Ralph also supports legacy TaskMaster data at:
 
 `.taskmaster/tasks/tasks.json`
-
-If `tasks.json` is missing/empty/invalid, `./ralph.sh` exits early and prints a copy/paste prompt to generate tasks (nothing runs until tasks exist).
 
 Schema reference:
 
@@ -29,16 +43,16 @@ Schema reference:
 
 ### Generating Tasks (Recommended)
 
-Run your designated agent and instruct it to use the `prd` skill to produce TaskMaster-format tasks at:
+Run your designated agent and instruct it to use the `prd` skill to produce a checklist backlog at:
 
-`.taskmaster/tasks/tasks.json`
+`TODO-next.md`
 
 Requirements for generated tasks:
 
-- MUST be TaskMaster format with `tasks[]` and `metadata`
+- MUST use markdown checklist items as the primary format
 - MUST include 3-7 small tasks with verifiable acceptance criteria
 - MUST use IETF 2119 language (MUST/SHOULD/MAY) in acceptance criteria
-- MUST set `metadata.project` and `metadata.branchName`
+- SHOULD keep titles imperative and implementation-scoped
 
 ## Running Ralph (CLI)
 
@@ -86,9 +100,9 @@ MCP tools/resources (current):
 
 ## Configuration
 
-TaskMaster model (written to `.taskmaster/config.json` by `ralph.sh`):
+Legacy TaskMaster model support:
 
-- `RALPH_TASKMASTER_MODEL` (default: `gpt-5-codex`)
+- `RALPH_TASKMASTER_MODEL` (default: `gpt-5-codex`) for older TaskMaster-backed repos only
 
 Codex:
 - `CODEX_MODEL`
@@ -103,4 +117,3 @@ Codex:
 - `UV_CACHE_DIR=$GIT_ROOT/.uv-cache`
 
 If your environment needs a different location, set `UV_CACHE_DIR` explicitly.
-

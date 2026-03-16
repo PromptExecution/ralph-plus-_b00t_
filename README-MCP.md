@@ -1,6 +1,6 @@
 # Ralph MCP
 
-Ralph now supports **FastMCP 3.0** with both server and client capabilities, plus TaskMaster-AI integration for rich task management!
+Ralph supports **FastMCP 3.0** with both server and client capabilities. Current task management is backlog-first via `TODO-next.md`; TaskMaster integration is legacy compatibility only.
 
 ## Features
 
@@ -79,15 +79,15 @@ Add to your MCP client settings (e.g., Claude Desktop):
 - Supports both CLI and MCP modes via `--mcp` flag
 - Model: gpt-5.2-codex (configurable via `CODEX_MODEL` env var)
 
-## TaskMaster MCP Integration
+## Legacy TaskMaster MCP Integration
 
-Ralph now integrates with TaskMaster-AI for advanced task management via MCP protocol.
+Ralph still supports TaskMaster-backed repos via MCP protocol, but new setups SHOULD use `TODO-next.md` and Ralph's built-in file handling instead.
 
 ### Setup TaskMaster MCP Server
 
 **Option 1: File-Based (Default)**
 
-No setup required! Ralph reads/writes `tasks.json` directly:
+No setup required. Ralph reads/writes `TODO-next.md` directly:
 
 ```bash
 # Works out of the box
@@ -96,12 +96,12 @@ uv run ralph list-tasks
 uv run ralph run --tool amp
 ```
 
-**Option 2: TaskMaster MCP Server**
+**Option 2: Legacy TaskMaster MCP Server**
 
 Connect to a TaskMaster MCP server for remote task management:
 
 ```bash
-# Set TaskMaster server URL
+# Set TaskMaster server URL for a legacy repo
 export TASKMASTER_URL="http://localhost:8080"
 
 # Ralph will use MCP instead of file-based access
@@ -109,7 +109,7 @@ uv run ralph status
 uv run ralph run --tool amp
 ```
 
-### TaskMaster CLI Integration
+### Legacy TaskMaster CLI Integration
 
 Ralph also supports the TaskMaster CLI for task operations:
 
@@ -122,7 +122,7 @@ uv run ralph status
 uv run ralph list-tasks
 ```
 
-### MCP Client Config for TaskMaster
+### MCP Client Config for Legacy TaskMaster
 
 Add TaskMaster to your MCP client settings (e.g., Claude Desktop):
 
@@ -130,7 +130,7 @@ Add TaskMaster to your MCP client settings (e.g., Claude Desktop):
 {
   "mcpServers": {
     "taskmaster": {
-      "command": "taskmaster",
+      "command": "task-master",
       "args": ["mcp", "start"]
     },
     "ralph": {
@@ -144,15 +144,15 @@ Add TaskMaster to your MCP client settings (e.g., Claude Desktop):
 }
 ```
 
-### TaskMaster Features in Ralph
+### Backlog Features in Ralph
 
-1. **Task Status Management**: pending → in-progress → done
-2. **Dependency Tracking**: `dependsOn` and `blockedBy` fields
+1. **Checklist Backlog Management**: `- [ ]` → `- [x]`
+2. **Legacy JSON Compatibility**: TaskMaster JSON still loads when present
 3. **Visual Progress**: Unicode progress bars and task trees
 4. **CLI Commands**: `status`, `list-tasks` with filtering
-5. **Hybrid Mode**: File-based or MCP server
+5. **Hybrid Mode**: `TODO-next.md` first, legacy TaskMaster second
 
-### Example: Using Ralph with TaskMaster
+### Example: Using Ralph with a Backlog
 
 ```bash
 # Check current status
@@ -171,9 +171,7 @@ uv run ralph list-tasks --filter pending
 uv run ralph run --tool amp --max-iterations 10
 ```
 
-### Migration from prd.json to tasks.json
+### Migration Notes
 
-Ralph has migrated from legacy `prd.json` format to TaskMaster's `tasks.json` format.
-
-See the main [README.md](README.md) for the complete migration guide.
-
+Ralph has moved from `prd.json` and TaskMaster-driven setup toward `TODO-next.md` as the primary operator-facing format.
+Legacy `.taskmaster/tasks/tasks.json` remains supported for older repos.

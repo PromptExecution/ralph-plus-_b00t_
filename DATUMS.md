@@ -71,8 +71,9 @@ ralph-stack (stack)
 ├── ralph.agent (agent) ← Agent coordination
 ├── ralph.cli (cli) ← CLI installation
 ├── ralph.mcp (mcp) ← MCP server
-├── taskmaster.cli (cli) ← Dependency
-├── taskmaster.mcp (mcp) ← Optional dependency
+├── b00t job/backlog (runtime) ← Primary task source
+├── taskmaster.cli (cli) ← Legacy compatibility
+├── taskmaster.mcp (mcp) ← Legacy optional dependency
 ├── python.cli (cli) ← Runtime requirement
 ├── uv.cli (cli) ← Package manager
 └── [executor].cli (cli) ← Optional: amp|claude|codex|opencode
@@ -84,7 +85,7 @@ Ralph agent provides the following skills, mapped to datum capabilities:
 
 | Skill | Datum | Capability |
 |-------|-------|------------|
-| taskmaster | taskmaster.cli | Task CRUD operations |
+| backlog-planning | ralph.cli | Backlog CRUD operations |
 | autonomous-loop | ralph.cli | Self-directed iteration |
 | prd-parsing | ralph.cli | Requirements → tasks |
 | workflow-execution | ralph.cli | Task implementation |
@@ -97,7 +98,7 @@ Ralph MCP server exposes:
 |------|------------|------------|
 | ralph_run | Start autonomous loop | tool, max-iterations, filter |
 | ralph_status | Check execution status | - |
-| ralph_list_tasks | List TaskMaster tasks | filter |
+| ralph_list_tasks | List Ralph backlog tasks | filter |
 
 | Prompt | Purpose |
 |--------|---------|
@@ -106,7 +107,7 @@ Ralph MCP server exposes:
 
 | Resource | Access |
 |----------|--------|
-| taskmaster://tasks | TaskMaster task data |
+| ralph://tasks | Ralph task data |
 | ralph://progress | Execution progress log |
 
 ## Role-Based Configuration
@@ -145,7 +146,7 @@ role = "specialist"
 captain = false
 
 [b00t.agent]
-skills = ["taskmaster", "prd-parsing"]
+skills = ["backlog-planning", "prd-parsing"]
 ```
 
 - Focused on specific capabilities
@@ -217,7 +218,7 @@ B00t discovers ralph datums via:
 
 Ralph integrates with these existing datums:
 
-- `taskmaster-ai.mcp.toml` - TaskMaster MCP server
+- `taskmaster-ai.mcp.toml` - Legacy TaskMaster MCP compatibility datum
 - `alpha.agent.toml` - Example agent configuration
 - `beta.agent.toml` - Example agent configuration
 - `ai-dev-stack.stack.toml` - Example stack configuration
